@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Management System</title>
+    <style>
+        body {
+            background-color: #b3e5fc;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        h1, h2 {
+            text-align: center;
+        }
+        .button {
+            background-color: #64b5f6;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        .button:hover {
+            background-color: #81c784;
+        }
+        input {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .list {
+            margin: 20px 0;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 300px;
+            border-radius: 5px;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        #mainContent {
+            display: none; /* Hide main content initially */
+        }
+    </style>
+</head>
+<body>
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="document.getElementById('loginModal').style.display='none'">&times;</span>
+            <h2>Teacher Login</h2>
+            <input type="text" id="username" placeholder="Username">
+            <input type="password" id="password" placeholder="Password">
+            <button class="button" onclick="login()">Login</button>
+        </div>
+    </div>
+
+    <div id="mainContent" class="container">
+        <h1>Student Management System</h1>
+        <h2>Add Student</h2>
+        <input type="text" id="name" placeholder="Student Name">
+        <input type="text" id="rollNo" placeholder="Roll Number">
+        <input type="text" id="grade" placeholder="Grade">
+        <input type="text" id="branch" placeholder="Branch">
+        <button class="button" onclick="addStudent()">Add Student</button>
+
+        <h2>Attendance Details</h2>
+        <input type="number" id="attended" placeholder="Classes Attended">
+        <input type="number" id="total" placeholder="Total Classes">
+        <select id="studentSelect" onchange="populateStudentDetails()"></select>
+        <button class="button" onclick="calculateAttendance()">Calculate Attendance</button>
+
+        <h2>All Students</h2>
+        <div class="list" id="studentList"></div>
+        
+        <button class="button" onclick="exportToExcel()">Export to Excel</button>
+        <button class="button" onclick="updateStudent()">Update Student</button>
+        <button class="button" onclick="deleteStudent()">Delete Student</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+    <script>
+        let students = [];
+
+        // Fetch students from the backend
+        async function fetchStudents() {
+            const response = await fetch('http://localhost:5000/students');
+            students = await response.json();
+            updateStudentList();
+        }
+
+        async function addStudent() {
+            const name = document.getElementById('name').value;
+            const rollNo = document.getElementById('rollNo').value;
+            const grade = document.getElementById('grade').value;
+            const branch = document.getElementById('branch').value;
+
+            if (name && rollNo && grade && branch) {
+                const student = { name, rollNo, grade, branch };
+                const response = await fetch('http://localhost:5000/students', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(student),
+                });
+                const data = await response.json();
+                students.push(data);
+                updateStudentList();
+                alert(`Student ${name} added successfully!`);
+            } else {
+                alert('Please fill in all fields.');
+            }
+        }
+
+        async function populateStudentDetails() {
+            const selectedIndex = document.getElementById('studentSelect').value;
+            if (selectedIndex !== "") {
+                const student = students[selectedIndex];
+                document.getElementById('name').value = student.name;
+                document.getElementById('rollNo').value = student.rollNo;
+                document.getElementById('grade').value = student.grade;
+                document.getElementById('branch').value = student.branch;
+            }
+        }
+
+        async function updateStudent() {
+            const selectedIndex = document.getElementById('studentSelect').value;
+
+            if (selectedIndex !== "") {
+                const name = document.getElementById('name').value;
+                const rollNo = document.getElementById('rollNo').value;
+                const grade = document.getElementById('grade').value;
+                const branch = document.getElementById('branch').value;
+
+                if (name && rollNo && grade && branch) {
+                    const studentId = students[selectedIndex]._id;
+                    const response = await fetch(`http://localhost:5000/students/${studentId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ name, rollNo, grade, branch }),
+                    });
+                    const data = await response.json();
+                    students[selectedIndex] = data;
+                    updateStudentList();
+                    alert(`Student ${name} updated successfully!`);
+                } else {
+                    alert('Please fill in all fields.');
+                }
+            } else {
+                alert('Please select a student to update.');
+            }
+        }
+
+        async function deleteStudent() {
+            const selectedIndex = document.getElementById('studentSelect').value;
+
+            if (selectedIndex !== "") {
+                const studentId = students[selectedIndex]._id;
+                await fetch(`http://localhost:5000/students/${studentId}`, {
+                    method: 'DELETE',
+                });
+                students.splice(selectedIndex, 1);
+                updateStudentList();
+                alert(`Student deleted successfully!`);
+            } else {
+                alert('Please select a student to delete.');
+            }
+        }
+
+        function updateStudentList() {
+            const studentSelect = document.getElementById('studentSelect');
+            const studentList = document.getElementById('studentList');
+            studentSelect.innerHTML = '';
+            studentList.innerHTML = '';
+
+            students.forEach((student, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = `${student.name} (Roll No: ${student.rollNo}, Grade: ${student.grade}, Branch: ${student.branch})`;
+                studentSelect.appendChild(option);
+
+                const listItem = document.createElement('div');
+                listItem.textContent = option.textContent;
+                studentList.appendChild(listItem);
+            });
+        }
+
+        function calculateAttendance() {
+            const attended = parseInt(document.getElementById('attended').value);
+            const total = parseInt(document.getElementById('total').value);
+            const selectedIndex = document.getElementById('studentSelect').value;
+
+            if (!isNaN(attended) && !isNaN(total) && selectedIndex !== "") {
+                if (attended > total) {
+                    alert('Invalid input: Classes attended cannot exceed total classes.');
+                    return;
+                }
+
+                const student = students[selectedIndex];
+                student.attendedClasses = attended;
+                student.totalClasses = total;
+                const attendancePercentage = (student.attendedClasses / student.totalClasses) * 100;
+                alert(`${student.name} Attendance: ${attendancePercentage.toFixed(2)}%`);
+            } else {
+                alert('Please enter valid numbers for attended and total classes and select a student.');
+            }
+        }
+
+        function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            if (username === 'teacher' && password === 'password123') {
+                alert('Login successful!');
+                document.getElementById('loginModal').style.display = 'none';
+                document.getElementById('mainContent').style.display = 'block';
+                fetchStudents(); // Fetch students on successful login
+            } else {
+                alert('Invalid username or password.');
+            }
+        }
+
+        function exportToExcel() {
+            const worksheet = XLSX.utils.json_to_sheet(students);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Students");
+            XLSX.writeFile(workbook, "students.xlsx");
+        }
+
+        window.onclick = function(event) {
+            if (event.target === document.getElementById('loginModal')) {
+                document.getElementById('loginModal').style.display = 'none';
+            }
+        }
+
+        window.onload = function() {
+            document.getElementById('loginModal').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
